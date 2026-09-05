@@ -69,15 +69,17 @@ function pinIcon(status) {
   return L.divIcon({
     className: "",
     html: `<div class="pin-dot" style="background:${STATUS_COLOR[status] || "#999"}"></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 14],
+    // .pin-dot is 28px rotated -45deg, so its point lands 28/2 * sqrt(2) below
+    // the box centre -- anchor there so the tip marks the actual location.
+    iconSize: [28, 28],
+    iconAnchor: [14, 33],
   });
 }
 function teamDotIcon() {
-  return L.divIcon({ className: "", html: `<div class="team-dot"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
+  return L.divIcon({ className: "", html: `<div class="team-dot"></div>`, iconSize: [20, 20], iconAnchor: [10, 10] });
 }
 function streetDotIcon() {
-  return L.divIcon({ className: "", html: `<div class="street-dot"></div>`, iconSize: [14, 14], iconAnchor: [7, 7] });
+  return L.divIcon({ className: "", html: `<div class="street-dot"></div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 }
 
 let regMarkers = new Map(); // id -> marker

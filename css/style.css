@@ -337,22 +337,25 @@ button {
 .toast.error { background: #9F1239; }
 
 /* Leaflet marker color helper (used via divIcon) */
+/* Sized to stay readable at city-wide zoom levels. box-sizing is border-box,
+   so the 3px white ring sits inside the width and the colour fill is what is
+   left over. Keep the JS iconSize/iconAnchor values in step with these. */
 .pin-dot {
-  width: 16px; height: 16px; border-radius: 50% 50% 50% 0;
+  width: 28px; height: 28px; border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
 }
 .team-dot {
-  width: 12px; height: 12px; border-radius: 999px;
-  background: #111827; border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  width: 20px; height: 20px; border-radius: 999px;
+  background: #111827; border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
 }
 /* Logged street-dog visits: completed work with no registration behind it. */
 .street-dot {
-  width: 14px; height: 14px; border-radius: 999px;
-  background: var(--status-done); border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  width: 24px; height: 24px; border-radius: 999px;
+  background: var(--status-done); border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
 }
 
 @media (min-width: 720px) {
