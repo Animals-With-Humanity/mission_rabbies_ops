@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mission Rabies Ops</title>
+  <link rel="icon" href="../assets/images/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ===== Top bar ===== -->
+  <header class="topbar">
+    <span class="logo-dot"></span>
+    <span class="title" id="view-title">Map</span>
+    <span class="team-badge" id="team-badge">--</span>
+  </header>
+
+  <!-- ===== MAP VIEW ===== -->
+  <section class="view active" id="view-map" style="position: relative;">
+    <div class="filter-bar" id="filter-bar">
+      <button class="chip active" data-status="">All</button>
+      <button class="chip" data-status="open"><span class="dot" style="background:var(--status-open)"></span>Open</button>
+      <button class="chip" data-status="in_progress"><span class="dot" style="background:var(--status-in-progress)"></span>In progress</button>
+      <button class="chip" data-status="done"><span class="dot" style="background:var(--status-done)"></span>Done</button>
+      <button class="chip" data-status="skipped"><span class="dot" style="background:var(--status-skipped)"></span>Skipped</button>
+    </div>
+    <div id="map"></div>
+    <button class="fab" id="log-street-btn">
+      <i data-lucide="map-pin-plus" style="width:16px;height:16px;"></i>
+      Log street dog
+    </button>
+  </section>
+
+  <!-- ===== LEADERBOARD VIEW ===== -->
+  <section class="view" id="view-leaderboard">
+    <div class="scroll-view">
+      <div class="tab-row">
+        <button class="lb-tab active" data-range="today">Today</button>
+        <button class="lb-tab" data-range="campaign">Campaign</button>
+      </div>
+      <p class="muted" id="lb-goal-line"></p>
+      <div class="section-title">Rankings</div>
+      <div id="leaderboard-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== ADMIN VIEW ===== -->
+  <section class="view" id="view-admin">
+    <div class="scroll-view" id="admin-content">
+      <div class="section-title">Campaign progress</div>
+      <div class="card" id="admin-stats-card">Loading…</div>
+
+      <div class="section-title">Sync registrations</div>
+      <div class="card">
+        <p class="muted" style="margin-top:0;">Pull the latest signups from the Google Sheet.</p>
+        <button class="btn btn-primary btn-full" id="sync-sheet-btn">
+          <i data-lucide="refresh-cw" style="width:15px;height:15px;"></i> Sync now
+        </button>
+        <p class="muted" style="margin: 10px 0 6px;">Or paste a CSV export if the sheet sync is down:</p>
+        <textarea class="field-input" id="csv-input" rows="4" placeholder="Paste CSV here, including header row"></textarea>
+        <button class="btn btn-outline btn-full" id="sync-csv-btn">Import pasted CSV</button>
+        <p id="sync-result" class="muted" style="margin-top:8px;"></p>
+      </div>
+
+      <div class="section-title">Geocode queue</div>
+      <div class="card">
+        <p class="muted" style="margin-top:0;">Runs pending addresses through OpenStreetMap search (1/sec). Rows it can't place need a manual pin below.</p>
+        <button class="btn btn-primary btn-full" id="geocode-btn">
+          <i data-lucide="map-pin" style="width:15px;height:15px;"></i> Run geocode batch
+        </button>
+        <p id="geocode-result" class="muted" style="margin-top:8px;"></p>
+      </div>
+
+      <div class="section-title">Needs a manual pin</div>
+      <div id="needs-pin-list"></div>
+
+      <div class="section-title">Add registration manually</div>
+      <div class="card">
+        <p class="muted" style="margin-top:0;">Create a registration that is not in the Google Sheet.</p>
+        <button class="btn btn-primary btn-full" id="manual-add-btn">
+          <i data-lucide="plus" style="width:15px;height:15px;"></i>Add registration
+        </button>
+      </div>
+
+      <div class="section-title">Teams</div>
+      <div class="card">
+        <div id="teams-list" style="margin-bottom: 12px;"></div>
+        <label class="field-label">New team name</label>
+        <input class="field-input" id="new-team-name" placeholder="e.g. Team Charlie" />
+        <label class="field-label">PIN</label>
+        <input class="field-input" id="new-team-pin" placeholder="4-digit PIN" />
+        <button class="btn btn-primary btn-full" id="create-team-btn">Add team</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Manual registration form (admin) ===== -->
+  <div class="sheet-backdrop" id="manual-reg-backdrop"></div>
+  <div class="sheet" id="manual-reg-sheet">
+    <div class="sheet-handle"></div>
+    <p style="font-weight:800; font-size:16px; margin:0 0 14px;">Add registration manually</p>
+
+    <label class="field-label" for="manual-full-name">Full name *</label>
+    <input class="field-input" id="manual-full-name" />
+    <label class="field-label" for="manual-contact-number">Contact number</label>
+    <input class="field-input" id="manual-contact-number" inputmode="tel" />
+    <label class="field-label" for="manual-whatsapp-number">WhatsApp number</label>
+    <input class="field-input" id="manual-whatsapp-number" inputmode="tel" />
+    <label class="field-label" for="manual-address">Address *</label>
+    <textarea class="field-input" id="manual-address" rows="2"></textarea>
+    <label class="field-label" for="manual-pin-code">PIN code</label>
+    <input class="field-input" id="manual-pin-code" inputmode="numeric" />
+    <label class="field-label" for="manual-dog-count">Dog count *</label>
+    <input class="field-input" id="manual-dog-count" type="number" min="1" />
+    <label class="field-label" for="manual-dog-location">Dog location</label>
+    <input class="field-input" id="manual-dog-location" placeholder="e.g. street, society gate" />
+    <label class="field-label" for="manual-temperament">Temperament</label>
+    <select class="field-input" id="manual-temperament">
+      <option value="">Not specified</option>
+      <option value="Friendly">Friendly</option>
+      <option value="Semi-aggressive">Semi-aggressive</option>
+      <option value="Aggressive">Aggressive</option>
+      <option value="Unsure">Unsure</option>
+    </select>
+    <label class="field-label" for="manual-deworm-status">Deworm status</label>
+    <select class="field-input" id="manual-deworm-status">
+      <option value="">Not specified</option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+      <option value="Not Sure">Not sure</option>
+    </select>
+    <label class="field-label" for="manual-health-concerns">Health concerns</label>
+    <textarea class="field-input" id="manual-health-concerns" rows="2"></textarea>
+    <label class="field-label" for="manual-nine-in-one">9-in-1 add-on</label>
+    <select class="field-input" id="manual-nine-in-one">
+      <option value="">Not specified</option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+    </select>
+
+    <button class="btn btn-outline btn-full" id="manual-location-btn">
+      <i data-lucide="map-pin" style="width:15px;height:15px;"></i>Search and choose location *
+    </button>
+    <p class="muted" id="manual-location-status" style="margin:8px 0;"></p>
+    <p id="manual-reg-error" style="color:#9F1239; font-size:13px; font-weight:600; display:none;"></p>
+
+    <div class="action-grid">
+      <button class="btn btn-ghost" id="manual-reg-cancel">Cancel</button>
+      <button class="btn btn-primary" id="manual-reg-save">Save registration</button>
+    </div>
+  </div>
+
+  <!-- ===== Manual pin-drop mini map (admin) ===== -->
+  <div class="sheet-backdrop" id="pinmap-backdrop"></div>
+  <div class="sheet" id="pinmap-sheet">
+    <div class="sheet-handle"></div>
+    <p style="font-weight:700; margin: 0 0 6px;">Tap the map to place the pin</p>
+    <p class="muted" id="pinmap-address" style="margin: 0 0 10px;"></p>
+    <div class="location-search-row">
+      <input class="field-input" id="pinmap-search" aria-label="Search locality or address" placeholder="Search locality or address" />
+      <button class="btn btn-outline" id="pinmap-search-btn">Search</button>
+    </div>
+    <p class="muted" id="pinmap-search-status" style="margin:0 0 8px;"></p>
+    <div id="pinmap-search-results"></div>
+    <div id="pinmap" style="height: 320px; border-radius: 14px; overflow: hidden;"></div>
+    <div class="action-grid">
+      <button class="btn btn-ghost" id="pinmap-cancel">Cancel</button>
+      <button class="btn btn-primary" id="pinmap-save" disabled>Save pin</button>
+    </div>
+  </div>
+
+  <!-- ===== Pin detail bottom sheet ===== -->
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <div class="sheet" id="pin-sheet"></div>
+
+  <!-- ===== Log street-dog visit bottom sheet ===== -->
+  <div class="sheet-backdrop" id="street-backdrop"></div>
+  <div class="sheet" id="street-sheet">
+    <div class="sheet-handle"></div>
+    <p style="font-weight:800; font-size:16px; margin:0 0 4px;">Log a street-dog visit</p>
+    <p class="muted" style="margin:0 0 14px;">For dogs vaccinated with no registration on file.</p>
+
+    <label class="field-label" for="street-dog-count">Dogs vaccinated here</label>
+    <input class="field-input" id="street-dog-count" type="number" min="1" placeholder="e.g. 3" />
+
+    <label class="field-label" for="street-notes">Notes (optional)</label>
+    <textarea class="field-input" id="street-notes" rows="2" placeholder="e.g. near the market corner"></textarea>
+
+    <span class="field-label">Location</span>
+    <p class="muted" id="street-location-status" style="margin:0 0 8px;"></p>
+    <div class="action-grid" style="margin-top:0;">
+      <button class="btn btn-outline" id="street-use-gps">
+        <i data-lucide="crosshair" style="width:14px;height:14px;"></i>Use my location
+      </button>
+      <button class="btn btn-outline" id="street-pick-location">
+        <i data-lucide="map-pin" style="width:14px;height:14px;"></i>Pick on map
+      </button>
+    </div>
+
+    <p id="street-error" style="color:#9F1239; font-size:13px; font-weight:600; display:none;"></p>
+
+    <div class="action-grid">
+      <button class="btn btn-ghost" id="street-cancel">Cancel</button>
+      <button class="btn btn-primary" id="street-save">Save visit</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== Bottom nav ===== -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="map"><i data-lucide="map"></i>Map</button>
+    <button class="nav-btn" data-view="leaderboard"><i data-lucide="trophy"></i>Leaderboard</button>
+    <button class="nav-btn" data-view="admin" id="admin-nav-btn" style="display:none;"><i data-lucide="settings"></i>Admin</button>
+    <button class="nav-btn" id="logout-btn"><i data-lucide="log-out"></i>Log out</button>
+  </nav>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

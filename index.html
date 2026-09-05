@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Team Login | Mission Rabies Ops</title>
+  <link rel="icon" href="../assets/images/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body { overflow-y: auto; }
+    .login-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 28px 24px;
+      background: linear-gradient(180deg, #FFF6EC 0%, #FFEBD6 100%);
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 22px;
+      padding: 28px 22px;
+      box-shadow: 0 10px 30px rgba(43,26,15,0.10);
+      border: 1px solid #F1E4D5;
+    }
+    .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .brand-dot { width: 38px; height: 38px; border-radius: 12px; background: var(--orange); display: flex; align-items: center; justify-content: center; }
+    .brand-dot i { color: #fff; width: 20px; height: 20px; }
+    .brand-title { font-weight: 800; font-size: 17px; line-height: 1.2; }
+    .brand-sub { font-size: 12px; color: #A8988A; }
+    #login-error { color: #9F1239; font-size: 13px; font-weight: 600; margin-top: 4px; display: none; }
+    .submit-btn {
+      width: 100%; background: var(--orange); color: #fff; border: none; border-radius: 12px;
+      padding: 13px; font-weight: 700; font-size: 15px; margin-top: 4px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .submit-btn:hover { background: var(--orange-dark); }
+    .submit-btn:disabled { opacity: 0.6; }
+    .hint { text-align: center; font-size: 12px; color: #A8988A; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand-row">
+        <div class="brand-dot"><i data-lucide="syringe"></i></div>
+        <div>
+          <div class="brand-title">Mission Rabies Ops</div>
+          <div class="brand-sub">Field team login</div>
+        </div>
+      </div>
+
+      <form id="login-form">
+        <label class="field-label" for="teamName">Team name</label>
+        <input class="field-input" id="teamName" name="teamName" type="text" placeholder="e.g. Team Alpha" required autocomplete="username" />
+
+        <label class="field-label" for="pin">Team PIN</label>
+        <input class="field-input" id="pin" name="pin" type="password" inputmode="numeric" placeholder="4-digit PIN" required autocomplete="current-password" />
+
+        <p id="login-error"></p>
+
+        <button class="submit-btn" id="login-btn" type="submit">
+          <i data-lucide="log-in" style="width:16px;height:16px;"></i>
+          Log in
+        </button>
+      </form>
+
+      <p class="hint">Don't have a team PIN? Ask your admin to set one up for you.</p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    lucide.createIcons();
+
+    // Already logged in? Skip straight to the app.
+    if (OpsApi.getToken()) window.location.href = "app.html";
+
+    const form = document.getElementById("login-form");
+    const errorEl = document.getElementById("login-error");
+    const btn = document.getElementById("login-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.style.display = "none";
+      btn.disabled = true;
+      btn.textContent = "Logging in…";
+
+      try {
+        const teamName = document.getElementById("teamName").value.trim();
+        const pin = document.getElementById("pin").value.trim();
+        const { token, team } = await OpsApi.login(teamName, pin);
+        OpsApi.setSession(token, team);
+        window.location.href = "app.html";
+      } catch (err) {
+        errorEl.textContent = err.message || "Login failed.";
+        errorEl.style.display = "block";
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="log-in" style="width:16px;height:16px;"></i> Log in';
+        lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>
