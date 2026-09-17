@@ -251,6 +251,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  text-decoration: none;
 }
 .btn-primary { background: var(--orange); color: #fff; }
 .btn-primary:hover { background: var(--orange-dark); }
@@ -388,6 +389,39 @@ button {
   object-fit: cover;
   border-radius: 10px;
   border: 1px solid var(--border);
+}
+.photo-row img { cursor: zoom-in; }
+
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(17, 12, 8, 0.94);
+  display: none;
+  flex-direction: column;
+}
+.photo-lightbox.active { display: flex; }
+.photo-lightbox-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.photo-lightbox-toolbar .btn { min-width: 44px; color: #fff; background: #3F2A1C; }
+.photo-lightbox-stage {
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.photo-lightbox-stage img {
+  max-width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  transform: scale(var(--zoom, 1)) translate(var(--pan-x, 0px), var(--pan-y, 0px));
+  transform-origin: center center;
 }
 .report-kind-pill {
   display: inline-block;

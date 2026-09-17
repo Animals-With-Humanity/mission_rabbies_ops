@@ -586,19 +586,30 @@ async function loadReportsList() {
     wrap.innerHTML = rows
       .map(
         (r) => `
-      <button class="card report-card-btn" data-id="${r.id}" style="width:100%; text-align:left; font:inherit; color:inherit;">
-        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-          <span class="report-kind-pill">${escapeHtml(REPORT_KIND_LABEL[r.report_kind] || r.report_kind)}</span>
-          <span class="muted">${escapeHtml(new Date(r.created_at).toLocaleString())}</span>
+      <div class="card">
+        <button class="report-card-btn" data-id="${r.id}" style="width:100%; text-align:left; font:inherit; color:inherit; background:none; border:none; padding:0;">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+            <span class="report-kind-pill">${escapeHtml(REPORT_KIND_LABEL[r.report_kind] || r.report_kind)}</span>
+            <span class="muted">${escapeHtml(new Date(r.created_at).toLocaleString())}</span>
+          </div>
+          <div style="font-weight:700; margin-top:6px;">${escapeHtml(r.animal_type === "other" ? r.animal_type_other || "Other animal" : r.animal_type)} · ${escapeHtml(r.size_category)}</div>
+          <div class="muted">${escapeHtml(r.landmark || "No landmark")} · ${r.photo_count} photo(s)</div>
+          ${r.remarks ? `<div style="margin-top:6px; font-size:13px;">${escapeHtml(r.remarks)}</div>` : ""}
+        </button>
+        <div class="action-grid">
+          <button class="btn btn-outline report-locate-btn" type="button" data-id="${r.id}" data-lat="${r.lat}" data-lng="${r.lng}">Locate</button>
+          <a class="btn btn-outline" href="${googleMapsNavUrl(r.lat, r.lng)}" target="_blank" rel="noopener">Navigate</a>
         </div>
-        <div style="font-weight:700; margin-top:6px;">${escapeHtml(r.animal_type === "other" ? r.animal_type_other || "Other animal" : r.animal_type)} · ${escapeHtml(r.size_category)}</div>
-        <div class="muted">${escapeHtml(r.landmark || "No landmark")} · ${r.photo_count} photo(s)</div>
-        ${r.remarks ? `<div style="margin-top:6px; font-size:13px;">${escapeHtml(r.remarks)}</div>` : ""}
-      </button>`
+      </div>`
       )
       .join("");
     wrap.querySelectorAll(".report-card-btn").forEach((btn) => {
       btn.addEventListener("click", () => openReportDetail(Number(btn.dataset.id)));
+    });
+    wrap.querySelectorAll(".report-locate-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        goToReportOnMap(Number(btn.dataset.id), Number(btn.dataset.lat), Number(btn.dataset.lng));
+      });
     });
   } catch (err) {
     wrap.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
@@ -622,6 +633,84 @@ document.getElementById("report-search").addEventListener("keydown", (e) => {
   }
 });
 
+function googleMapsNavUrl(lat, lng) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lng)}`;
+}
+
+function goToReportOnMap(id, lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    toast("This report has no map coordinates.", true);
+    return;
+  }
+  closeSheetEl(reportDetailSheet, reportDetailBackdrop);
+  showView("map");
+  setTimeout(() => {
+    map.invalidateSize();
+    map.setView([lat, lng], 17);
+  }, 80);
+}
+
+const photoLightbox = document.getElementById("photo-lightbox");
+const photoLightboxImg = document.getElementById("photo-lightbox-img");
+const photoLightboxStage = document.getElementById("photo-lightbox-stage");
+let photoZoom = 1;
+let photoPanX = 0;
+let photoPanY = 0;
+let photoPinchStart = 0;
+
+function applyPhotoZoom() {
+  photoLightboxImg.style.setProperty("--zoom", String(photoZoom));
+  photoLightboxImg.style.setProperty("--pan-x", `${photoPanX}px`);
+  photoLightboxImg.style.setProperty("--pan-y", `${photoPanY}px`);
+}
+
+function setPhotoZoom(next) {
+  photoZoom = Math.min(5, Math.max(1, next));
+  if (photoZoom === 1) {
+    photoPanX = 0;
+    photoPanY = 0;
+  }
+  applyPhotoZoom();
+}
+
+function openPhotoLightbox(src) {
+  photoLightboxImg.src = src;
+  photoZoom = 1;
+  photoPanX = 0;
+  photoPanY = 0;
+  applyPhotoZoom();
+  photoLightbox.hidden = false;
+  photoLightbox.classList.add("active");
+}
+
+function closePhotoLightbox() {
+  photoLightbox.classList.remove("active");
+  photoLightbox.hidden = true;
+  photoLightboxImg.removeAttribute("src");
+}
+
+document.getElementById("photo-lightbox-close").addEventListener("click", closePhotoLightbox);
+document.getElementById("photo-zoom-in").addEventListener("click", () => setPhotoZoom(photoZoom + 0.5));
+document.getElementById("photo-zoom-out").addEventListener("click", () => setPhotoZoom(photoZoom - 0.5));
+photoLightboxStage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  setPhotoZoom(photoZoom + (e.deltaY < 0 ? 0.25 : -0.25));
+}, { passive: false });
+photoLightboxStage.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 2) {
+    const [a, b] = e.touches;
+    photoPinchStart = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+}, { passive: true });
+photoLightboxStage.addEventListener("touchmove", (e) => {
+  if (e.touches.length !== 2 || !photoPinchStart) return;
+  e.preventDefault();
+  const [a, b] = e.touches;
+  const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  setPhotoZoom(photoZoom * (dist / photoPinchStart));
+  photoPinchStart = dist;
+}, { passive: false });
+
 async function openReportDetail(id) {
   try {
     const report = await OpsApi.getFieldReport(id);
@@ -637,17 +726,25 @@ async function openReportDetail(id) {
       <div class="info-row"><span class="label">Coordinates</span><span class="value">${Number(report.lat).toFixed(5)}, ${Number(report.lng).toFixed(5)}</span></div>
       <p style="margin:12px 0;">${escapeHtml(report.remarks || "No remarks.")}</p>
       ${photosHtml}
+      <div class="action-grid">
+        <button class="btn btn-outline" id="report-detail-locate" type="button">Locate</button>
+        <a class="btn btn-outline" id="report-detail-navigate" href="${googleMapsNavUrl(report.lat, report.lng)}" target="_blank" rel="noopener">Navigate</a>
+      </div>
       <button class="btn btn-ghost btn-full" id="report-detail-close">Close</button>
     `;
     openSheetEl(reportDetailSheet, reportDetailBackdrop);
     document.getElementById("report-detail-close").addEventListener("click", () =>
       closeSheetEl(reportDetailSheet, reportDetailBackdrop)
     );
+    document.getElementById("report-detail-locate").addEventListener("click", () =>
+      goToReportOnMap(report.id, Number(report.lat), Number(report.lng))
+    );
     if (report.photos?.length) {
       const row = document.getElementById("report-detail-photos");
       for (const photo of report.photos) {
         const img = document.createElement("img");
         img.alt = "Field report photo";
+        img.title = "Tap to zoom";
         // Cloudinary (and any other https) URLs can be shown directly. Legacy
         // rows still use the authenticated API proxy.
         if (/^https?:\/\//i.test(photo.url)) {
@@ -656,6 +753,7 @@ async function openReportDetail(id) {
           const blob = await OpsApi.fetchAuthorizedBlob(photo.url);
           img.src = URL.createObjectURL(blob);
         }
+        img.addEventListener("click", () => openPhotoLightbox(img.src));
         row.appendChild(img);
       }
     }

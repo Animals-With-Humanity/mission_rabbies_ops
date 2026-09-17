@@ -290,6 +290,18 @@
   <div class="sheet-backdrop" id="report-detail-backdrop"></div>
   <div class="sheet" id="report-detail-sheet"></div>
 
+  <!-- ===== Photo zoom lightbox ===== -->
+  <div class="photo-lightbox" id="photo-lightbox" hidden>
+    <div class="photo-lightbox-toolbar">
+      <button class="btn btn-ghost" id="photo-zoom-out" type="button">−</button>
+      <button class="btn btn-ghost" id="photo-zoom-in" type="button">+</button>
+      <button class="btn btn-ghost" id="photo-lightbox-close" type="button">Close</button>
+    </div>
+    <div class="photo-lightbox-stage" id="photo-lightbox-stage">
+      <img id="photo-lightbox-img" alt="Field report photo" />
+    </div>
+  </div>
+
   <!-- ===== Log street-dog visit bottom sheet ===== -->
   <div class="sheet-backdrop" id="street-backdrop"></div>
   <div class="sheet" id="street-sheet">
