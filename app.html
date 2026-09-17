@@ -34,10 +34,16 @@
       <button class="chip" data-status="skipped"><span class="dot" style="background:var(--status-skipped)"></span>Skipped</button>
     </div>
     <div id="map"></div>
-    <button class="fab" id="log-street-btn">
-      <i data-lucide="map-pin-plus" style="width:16px;height:16px;"></i>
-      Log street dog
-    </button>
+    <div class="fab-stack">
+      <button class="fab fab-secondary" id="report-animal-btn">
+        <i data-lucide="camera" style="width:16px;height:16px;"></i>
+        Report animal
+      </button>
+      <button class="fab" id="log-street-btn">
+        <i data-lucide="map-pin-plus" style="width:16px;height:16px;"></i>
+        Log street dog
+      </button>
+    </div>
   </section>
 
   <!-- ===== LEADERBOARD VIEW ===== -->
@@ -50,6 +56,45 @@
       <p class="muted" id="lb-goal-line"></p>
       <div class="section-title">Rankings</div>
       <div id="leaderboard-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== FIELD REPORTS VIEW ===== -->
+  <section class="view" id="view-reports">
+    <div class="scroll-view">
+      <p class="muted" style="margin-top:0;">Sightings from Mission Rabies — rescue, medication, unsterilized, or notes. Structured so a later rescue/ABC app can read the same records.</p>
+      <button class="btn btn-primary btn-full" id="reports-add-btn">
+        <i data-lucide="camera" style="width:15px;height:15px;"></i>Add field report
+      </button>
+
+      <div class="section-title">Needs a pin</div>
+      <p class="muted" style="margin-top:0;">Addresses the sheet imported but the map could not find. Anyone on a team can read the address and drop the pin.</p>
+      <div id="team-needs-pin-list"></div>
+
+      <div class="section-title">Recorded sightings</div>
+      <div class="filter-bar-static" id="report-filter-bar">
+        <button class="chip active" data-kind="">All</button>
+        <button class="chip" data-kind="rescue_needed">Rescue</button>
+        <button class="chip" data-kind="medication_needed">Medication</button>
+        <button class="chip" data-kind="unsterilized">Unsterilized</button>
+        <button class="chip" data-kind="observation">Note</button>
+      </div>
+      <div class="location-search-row" style="margin-top:8px;">
+        <select class="field-input" id="report-animal-filter" aria-label="Animal type">
+          <option value="">All animals</option>
+          <option value="dog">Dog</option>
+          <option value="cat">Cat</option>
+          <option value="other">Other</option>
+        </select>
+        <select class="field-input" id="report-size-filter" aria-label="Size">
+          <option value="">All sizes</option>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </div>
+      <input class="field-input" id="report-search" placeholder="Search landmark or remarks" />
+      <div id="reports-list"></div>
     </div>
   </section>
 
@@ -182,6 +227,69 @@
   <div class="sheet-backdrop" id="sheet-backdrop"></div>
   <div class="sheet" id="pin-sheet"></div>
 
+  <!-- ===== Field report form ===== -->
+  <div class="sheet-backdrop" id="report-form-backdrop"></div>
+  <div class="sheet" id="report-form-sheet">
+    <div class="sheet-handle"></div>
+    <p style="font-weight:800; font-size:16px; margin:0 0 4px;">Record a field sighting</p>
+    <p class="muted" style="margin:0 0 14px;">Use this when an animal needs rescue or medicine, is not sterilized, or you just want a note with a photo.</p>
+
+    <span class="field-label">What did you find? *</span>
+    <select class="field-input" id="report-kind">
+      <option value="rescue_needed">Needs rescue</option>
+      <option value="medication_needed">Needs medication</option>
+      <option value="unsterilized">Not sterilized</option>
+      <option value="observation">Observation / note</option>
+    </select>
+
+    <label class="field-label" for="report-animal">Animal *</label>
+    <select class="field-input" id="report-animal">
+      <option value="dog">Dog</option>
+      <option value="cat">Cat</option>
+      <option value="other">Other</option>
+    </select>
+    <label class="field-label" for="report-animal-other">If other, which animal?</label>
+    <input class="field-input" id="report-animal-other" placeholder="e.g. cow, monkey" />
+
+    <label class="field-label" for="report-size">Size *</label>
+    <select class="field-input" id="report-size">
+      <option value="small">Small</option>
+      <option value="medium">Medium</option>
+      <option value="large">Large</option>
+    </select>
+
+    <label class="field-label" for="report-landmark">Landmark / written location</label>
+    <input class="field-input" id="report-landmark" placeholder="e.g. opposite Hema school gate" />
+
+    <label class="field-label" for="report-remarks">Remarks</label>
+    <textarea class="field-input" id="report-remarks" rows="3" placeholder="Condition, behaviour, what the team should do"></textarea>
+
+    <label class="field-label" for="report-photos">Photos (up to 3)</label>
+    <input class="field-input" id="report-photos" type="file" accept="image/*" multiple />
+    <div id="report-photo-preview" class="photo-preview-row"></div>
+
+    <span class="field-label">Map location *</span>
+    <p class="muted" id="report-location-status" style="margin:0 0 8px;"></p>
+    <div class="action-grid" style="margin-top:0;">
+      <button class="btn btn-outline" id="report-use-gps" type="button">
+        <i data-lucide="crosshair" style="width:14px;height:14px;"></i>Use my location
+      </button>
+      <button class="btn btn-outline" id="report-pick-location" type="button">
+        <i data-lucide="map-pin" style="width:14px;height:14px;"></i>Pick on map
+      </button>
+    </div>
+
+    <p id="report-form-error" style="color:#9F1239; font-size:13px; font-weight:600; display:none;"></p>
+    <div class="action-grid">
+      <button class="btn btn-ghost" id="report-form-cancel">Cancel</button>
+      <button class="btn btn-primary" id="report-form-save">Save report</button>
+    </div>
+  </div>
+
+  <!-- ===== Field report detail ===== -->
+  <div class="sheet-backdrop" id="report-detail-backdrop"></div>
+  <div class="sheet" id="report-detail-sheet"></div>
+
   <!-- ===== Log street-dog visit bottom sheet ===== -->
   <div class="sheet-backdrop" id="street-backdrop"></div>
   <div class="sheet" id="street-sheet">
@@ -219,6 +327,7 @@
   <!-- ===== Bottom nav ===== -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-view="map"><i data-lucide="map"></i>Map</button>
+    <button class="nav-btn" data-view="reports"><i data-lucide="clipboard-list"></i>Reports</button>
     <button class="nav-btn" data-view="leaderboard"><i data-lucide="trophy"></i>Leaderboard</button>
     <button class="nav-btn" data-view="admin" id="admin-nav-btn" style="display:none;"><i data-lucide="settings"></i>Admin</button>
     <button class="nav-btn" id="logout-btn"><i data-lucide="log-out"></i>Log out</button>

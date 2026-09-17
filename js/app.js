@@ -16,13 +16,14 @@ function toast(message, isError = false) {
 }
 
 // ---------- View switching ----------
-const VIEW_TITLES = { map: "Map", leaderboard: "Leaderboard", admin: "Admin" };
+const VIEW_TITLES = { map: "Map", reports: "Reports", leaderboard: "Leaderboard", admin: "Admin" };
 function showView(name) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.getElementById(`view-${name}`).classList.add("active");
   document.querySelectorAll(".nav-btn[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   document.getElementById("view-title").textContent = VIEW_TITLES[name];
   if (name === "map") setTimeout(() => map.invalidateSize(), 50);
+  if (name === "reports") loadReportsView();
   if (name === "leaderboard") loadLeaderboard();
   if (name === "admin") loadAdmin();
 }
@@ -81,12 +82,17 @@ function teamDotIcon() {
 function streetDotIcon() {
   return L.divIcon({ className: "", html: `<div class="street-dot"></div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 }
+function reportDotIcon() {
+  return L.divIcon({ className: "", html: `<div class="report-dot"></div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+}
 
 let regMarkers = new Map(); // id -> marker
 let teamMarkers = new Map(); // teamId -> marker
 let streetMarkers = new Map(); // visit id -> marker
+let reportMarkers = new Map(); // field report id -> marker
 let currentStatusFilter = "";
 let registrationsCache = [];
+let fieldReportsCache = [];
 
 async function loadRegistrations() {
   try {
@@ -137,6 +143,23 @@ async function loadStreetVisits() {
   }
 }
 
+async function loadFieldReportMarkers() {
+  try {
+    fieldReportsCache = await OpsApi.listFieldReports({ source: "mission_rabies" });
+    reportMarkers.forEach((m) => map.removeLayer(m));
+    reportMarkers.clear();
+    fieldReportsCache.forEach((report) => {
+      if (report.lat == null || report.lng == null) return;
+      const marker = L.marker([report.lat, report.lng], { icon: reportDotIcon() })
+        .on("click", () => openReportDetail(report.id));
+      marker.addTo(map);
+      reportMarkers.set(report.id, marker);
+    });
+  } catch {
+    /* non-critical */
+  }
+}
+
 async function loadTeamLocations() {
   try {
     const locations = await OpsApi.getTeamLocations();
@@ -180,6 +203,7 @@ setInterval(loadTeamLocations, 20000);
 loadTeamLocations();
 loadRegistrations();
 loadStreetVisits();
+loadFieldReportMarkers();
 
 // ==================================================================
 // PIN DETAIL SHEET
@@ -394,6 +418,254 @@ document.getElementById("street-save").addEventListener("click", async () => {
 });
 
 // ==================================================================
+// FIELD REPORTS (rescue / medication / unsterilized / notes)
+// ==================================================================
+const REPORT_KIND_LABEL = {
+  rescue_needed: "Needs rescue",
+  medication_needed: "Needs medication",
+  unsterilized: "Not sterilized",
+  observation: "Observation",
+};
+const reportFormSheet = document.getElementById("report-form-sheet");
+const reportFormBackdrop = document.getElementById("report-form-backdrop");
+const reportDetailSheet = document.getElementById("report-detail-sheet");
+const reportDetailBackdrop = document.getElementById("report-detail-backdrop");
+
+let reportLocation = null;
+let reportPhotos = [];
+let reportKindFilter = "";
+
+function setReportLocationStatus(text) {
+  document.getElementById("report-location-status").textContent = text;
+}
+
+function toggleAnimalOther() {
+  const other = document.getElementById("report-animal").value === "other";
+  document.getElementById("report-animal-other").style.display = other ? "block" : "none";
+  document.querySelector("label[for='report-animal-other']").style.display = other ? "block" : "none";
+}
+
+function resetReportForm() {
+  document.getElementById("report-kind").value = "rescue_needed";
+  document.getElementById("report-animal").value = "dog";
+  document.getElementById("report-animal-other").value = "";
+  document.getElementById("report-size").value = "medium";
+  document.getElementById("report-landmark").value = "";
+  document.getElementById("report-remarks").value = "";
+  document.getElementById("report-photos").value = "";
+  document.getElementById("report-photo-preview").innerHTML = "";
+  document.getElementById("report-form-error").style.display = "none";
+  reportPhotos = [];
+  reportLocation = null;
+  setReportLocationStatus("Using your current GPS location.");
+  toggleAnimalOther();
+}
+
+function openReportForm() {
+  resetReportForm();
+  openSheetEl(reportFormSheet, reportFormBackdrop);
+  lucide.createIcons();
+}
+
+document.getElementById("report-animal-btn").addEventListener("click", openReportForm);
+document.getElementById("reports-add-btn").addEventListener("click", openReportForm);
+document.getElementById("report-form-cancel").addEventListener("click", () => closeSheetEl(reportFormSheet, reportFormBackdrop));
+reportFormBackdrop.addEventListener("click", () => closeSheetEl(reportFormSheet, reportFormBackdrop));
+document.getElementById("report-animal").addEventListener("change", toggleAnimalOther);
+toggleAnimalOther();
+
+document.getElementById("report-use-gps").addEventListener("click", () => {
+  reportLocation = null;
+  setReportLocationStatus("Using your current GPS location.");
+});
+document.getElementById("report-pick-location").addEventListener("click", () => {
+  const landmark = document.getElementById("report-landmark").value.trim();
+  openPinDropMap(null, { address: landmark }, (latlng) => {
+    reportLocation = latlng;
+    setReportLocationStatus(`Picked on map: ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`);
+  });
+});
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 1280;
+      let w = img.width;
+      let h = img.height;
+      if (w > max || h > max) {
+        const scale = max / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+      resolve({ mimeType: "image/jpeg", data: dataUrl.split(",")[1], preview: dataUrl });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read that photo."));
+    };
+    img.src = url;
+  });
+}
+
+document.getElementById("report-photos").addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files || []).slice(0, 3);
+  const preview = document.getElementById("report-photo-preview");
+  preview.innerHTML = "";
+  reportPhotos = [];
+  try {
+    for (const file of files) {
+      const photo = await compressImageFile(file);
+      reportPhotos.push({ mimeType: photo.mimeType, data: photo.data });
+      const img = document.createElement("img");
+      img.src = photo.preview;
+      img.alt = "Selected photo";
+      preview.appendChild(img);
+    }
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+document.getElementById("report-form-save").addEventListener("click", async () => {
+  const errorEl = document.getElementById("report-form-error");
+  errorEl.style.display = "none";
+  try {
+    const pos = reportLocation || (await getCurrentPosition());
+    await OpsApi.createFieldReport({
+      source: "mission_rabies",
+      reportKind: document.getElementById("report-kind").value,
+      animalType: document.getElementById("report-animal").value,
+      animalTypeOther: document.getElementById("report-animal-other").value.trim(),
+      sizeCategory: document.getElementById("report-size").value,
+      landmark: document.getElementById("report-landmark").value.trim(),
+      remarks: document.getElementById("report-remarks").value.trim(),
+      lat: pos.lat,
+      lng: pos.lng,
+      photos: reportPhotos,
+    });
+    closeSheetEl(reportFormSheet, reportFormBackdrop);
+    toast("Field report saved.");
+    loadReportsView();
+    loadFieldReportMarkers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = "block";
+  }
+});
+
+async function loadReportsView() {
+  loadNeedsPinList();
+  await loadReportsList();
+}
+
+async function loadReportsList() {
+  const wrap = document.getElementById("reports-list");
+  const q = document.getElementById("report-search").value.trim();
+  const params = { source: "mission_rabies" };
+  if (reportKindFilter) params.kind = reportKindFilter;
+  const animal = document.getElementById("report-animal-filter").value;
+  const size = document.getElementById("report-size-filter").value;
+  if (animal) params.animalType = animal;
+  if (size) params.size = size;
+  if (q) params.q = q;
+
+  try {
+    const rows = await OpsApi.listFieldReports(params);
+    if (!rows.length) {
+      wrap.innerHTML = `<p class="muted">No field reports match these filters.</p>`;
+      return;
+    }
+    wrap.innerHTML = rows
+      .map(
+        (r) => `
+      <button class="card report-card-btn" data-id="${r.id}" style="width:100%; text-align:left; font:inherit; color:inherit;">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+          <span class="report-kind-pill">${escapeHtml(REPORT_KIND_LABEL[r.report_kind] || r.report_kind)}</span>
+          <span class="muted">${escapeHtml(new Date(r.created_at).toLocaleString())}</span>
+        </div>
+        <div style="font-weight:700; margin-top:6px;">${escapeHtml(r.animal_type === "other" ? r.animal_type_other || "Other animal" : r.animal_type)} · ${escapeHtml(r.size_category)}</div>
+        <div class="muted">${escapeHtml(r.landmark || "No landmark")} · ${r.photo_count} photo(s)</div>
+        ${r.remarks ? `<div style="margin-top:6px; font-size:13px;">${escapeHtml(r.remarks)}</div>` : ""}
+      </button>`
+      )
+      .join("");
+    wrap.querySelectorAll(".report-card-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openReportDetail(Number(btn.dataset.id)));
+    });
+  } catch (err) {
+    wrap.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+document.getElementById("report-filter-bar").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  document.querySelectorAll("#report-filter-bar .chip").forEach((c) => c.classList.remove("active"));
+  chip.classList.add("active");
+  reportKindFilter = chip.dataset.kind || "";
+  loadReportsList();
+});
+document.getElementById("report-animal-filter").addEventListener("change", loadReportsList);
+document.getElementById("report-size-filter").addEventListener("change", loadReportsList);
+document.getElementById("report-search").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    loadReportsList();
+  }
+});
+
+async function openReportDetail(id) {
+  try {
+    const report = await OpsApi.getFieldReport(id);
+    const photosHtml = report.photos?.length
+      ? `<div class="photo-row" id="report-detail-photos"></div>`
+      : `<p class="muted">No photos attached.</p>`;
+    reportDetailSheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <span class="report-kind-pill">${escapeHtml(REPORT_KIND_LABEL[report.report_kind] || report.report_kind)}</span>
+      <p style="font-weight:800; font-size:16px; margin:8px 0 4px;">${escapeHtml(report.animal_type === "other" ? report.animal_type_other || "Other animal" : report.animal_type)} · ${escapeHtml(report.size_category)}</p>
+      <p class="muted" style="margin:0 0 10px;">${escapeHtml(report.recorded_by_team_name || "Unknown team")} · ${escapeHtml(new Date(report.created_at).toLocaleString())}</p>
+      <div class="info-row"><span class="label">Landmark</span><span class="value">${escapeHtml(report.landmark || "—")}</span></div>
+      <div class="info-row"><span class="label">Coordinates</span><span class="value">${Number(report.lat).toFixed(5)}, ${Number(report.lng).toFixed(5)}</span></div>
+      <p style="margin:12px 0;">${escapeHtml(report.remarks || "No remarks.")}</p>
+      ${photosHtml}
+      <button class="btn btn-ghost btn-full" id="report-detail-close">Close</button>
+    `;
+    openSheetEl(reportDetailSheet, reportDetailBackdrop);
+    document.getElementById("report-detail-close").addEventListener("click", () =>
+      closeSheetEl(reportDetailSheet, reportDetailBackdrop)
+    );
+    if (report.photos?.length) {
+      const row = document.getElementById("report-detail-photos");
+      for (const photo of report.photos) {
+        const img = document.createElement("img");
+        img.alt = "Field report photo";
+        // Cloudinary (and any other https) URLs can be shown directly. Legacy
+        // rows still use the authenticated API proxy.
+        if (/^https?:\/\//i.test(photo.url)) {
+          img.src = photo.url;
+        } else {
+          const blob = await OpsApi.fetchAuthorizedBlob(photo.url);
+          img.src = URL.createObjectURL(blob);
+        }
+        row.appendChild(img);
+      }
+    }
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+reportDetailBackdrop.addEventListener("click", () => closeSheetEl(reportDetailSheet, reportDetailBackdrop));
+
+// ==================================================================
 // LEADERBOARD VIEW
 // ==================================================================
 let lbRange = "today";
@@ -510,31 +782,42 @@ document.getElementById("geocode-btn").addEventListener("click", async (e) => {
   }
 });
 
-async function loadNeedsPinList() {
-  const wrap = document.getElementById("needs-pin-list");
-  try {
-    const rows = await OpsApi.adminGeocodeQueue();
-    if (!rows.length) {
-      wrap.innerHTML = `<p class="muted">Nothing waiting on a manual pin.</p>`;
-      return;
-    }
-    wrap.innerHTML = rows
-      .map(
-        (r) => `
+function renderNeedsPinCards(wrap, rows) {
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = `<p class="muted">Nothing waiting on a manual pin.</p>`;
+    return;
+  }
+  wrap.innerHTML = rows
+    .map(
+      (r) => `
       <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div>
           <div style="font-weight:700; font-size:13px;">${escapeHtml(r.full_name || "Unnamed")}</div>
-          <div class="muted" style="font-size:12px;">${escapeHtml(r.address || "")}</div>
+          <div class="muted" style="font-size:12px;">${escapeHtml(r.address || "")}${r.pin_code ? " · " + escapeHtml(r.pin_code) : ""}</div>
         </div>
         <button class="btn btn-outline drop-pin-btn" data-id="${r.id}" style="white-space:nowrap;">Drop pin</button>
       </div>`
-      )
-      .join("");
-    wrap.querySelectorAll(".drop-pin-btn").forEach((btn) => {
-      btn.addEventListener("click", () => openPinDropMap(Number(btn.dataset.id), rows.find((r) => r.id === Number(btn.dataset.id))));
-    });
+    )
+    .join("");
+  wrap.querySelectorAll(".drop-pin-btn").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      openPinDropMap(Number(btn.dataset.id), rows.find((r) => r.id === Number(btn.dataset.id)))
+    );
+  });
+}
+
+async function loadNeedsPinList() {
+  try {
+    // Shared list: any signed-in team can place an unfound address.
+    const rows = await OpsApi.listRegistrations({ geocodeStatus: "needs_pin" });
+    renderNeedsPinCards(document.getElementById("needs-pin-list"), rows);
+    renderNeedsPinCards(document.getElementById("team-needs-pin-list"), rows);
   } catch (err) {
-    wrap.innerHTML = `<p class="muted">Couldn't load the queue.</p>`;
+    ["needs-pin-list", "team-needs-pin-list"].forEach((id) => {
+      const wrap = document.getElementById(id);
+      if (wrap) wrap.innerHTML = `<p class="muted">Couldn't load the queue.</p>`;
+    });
   }
 }
 
@@ -773,7 +1056,7 @@ document.getElementById("pinmap-save").addEventListener("click", async () => {
     if (pinDropRegId) {
       toast("Pin saved.");
       loadNeedsPinList();
-      loadAdmin();
+      if (ME.isAdmin) loadAdmin();
       loadRegistrations();
     }
   } catch (err) {

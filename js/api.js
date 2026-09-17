@@ -66,6 +66,28 @@ const OpsApi = (() => {
       return request(`/api/visits${qs ? `?${qs}` : ""}`);
     },
 
+    listFieldReports: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request(`/api/field-reports${qs ? `?${qs}` : ""}`);
+    },
+    getFieldReport: (id) => request(`/api/field-reports/${id}`),
+    createFieldReport: (body) => request("/api/field-reports", { method: "POST", body }),
+    fieldReportPhotoUrl: (reportId, photoId) =>
+      `${window.OPS_API_BASE_URL}/api/field-reports/${reportId}/photos/${photoId}`,
+    fetchAuthorizedBlob: async (path) => {
+      const token = getToken();
+      const res = await fetch(`${window.OPS_API_BASE_URL}${path}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 401) {
+        clearSession();
+        window.location.href = "index.html";
+        throw new Error("Session expired.");
+      }
+      if (!res.ok) throw new Error("Could not load photo.");
+      return res.blob();
+    },
+
     getLeaderboard: () => request("/api/leaderboard"),
 
     pingLocation: (lat, lng) => request("/api/teams/me/location", { method: "PUT", body: { lat, lng } }),
